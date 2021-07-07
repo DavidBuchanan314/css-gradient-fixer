@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html>
+	<head>
+		<meta charset="UTF-8" />
+		<title>CSS Gradient Fixer</title>
+		<style>
+			article {
+				max-width: 768px;
+				margin: auto;
+			}
+			textarea {
+				width: 100%;
+				height: 64px;
+			}
+			#original-div {
+				border: 1px solid black;
+				width: 100%;
+				height: 64px;
+			}
+			#improved-div {
+				border: 1px solid black;
+				width: 100%;
+				height: 64px;
+			}
+			#perfect-canvas {
+				border: 1px solid black;
+				width: 100%;
+				height: 64px;
+			}
+		</style>
+	</head>
+	<body>
+		<article>
+			<h1>CSS Gradient Fixer</h1>
+			<p>
+				As is tradition, CSS does colour interpolation totally wrong.
+				<a href="https://erikmcclure.com/blog/everyone-does-srgb-wrong-because/">This article</a>
+				does a good job of explaining why.
+			</p>
+			<p>
+				My gradient string parsing code is a bit fragile.
+				It only works for inputs that match the pattern
+				<code>
+					[colour 0] [percentage 0], ..., [colour n] [percentage n]
+				</code>
+			</p>
+			
+			<h3>Input CSS:</h3>
+			<textarea id="input-textarea" oninput="refresh();">#0F0 0%, #f00 100%</textarea>
+			
+			<h3>How the CSS spec says it looks (native CSS rendering)</h3>
+			<div id="original-div"></div>
+			
+			<h3>How it should really look (canvas rendering with proper interpolation)</h3>
+			<canvas id="perfect-canvas"></canvas>
+			
+			<h3>How our improved CSS looks (native CSS rendering)</h3>
+			<div id="improved-div"></div>
+			
+			<h3>Output CSS:</h3>
+			<textarea id="output-textarea">hello I am some css</textarea>
+		</article>
+		
+		<script type="text/javascript">
+			
+			// Disclaimer: I am not a JS developer!
+			
+			function srgb_to_linear(c_in) {
+				if (c_in <= 0.04045) {
+					return c_in / 12.92;
+				} else {
+					return Math.pow((c_in + 0.055) / 1.055, 2.4);
+				}
+			}
+			
+			function linear_to_srgb(c_in) {
+				if (c_in <= 0.0031308) {
+					return c_in * 12.92;
+				} else {
+					return 1.055 * Math.pow(c_in, 1/2.4) - 0.055;
+				}
+			}
+			
+			function colour_string_to_linear_rgba(colour_str) {
+				// This is a fun hack, to let the browser do the parsing for us.
+				// It gracefully handles all possible color string types, from
+				// "red" to rgba(1, 0, 0, 100)
+				// We do this by drawing to an offscreen canvas, then reading back
+				// the pixel value using getImageData()
+				// It's a rather expensive way of doing things, but we don't
+				// call it very much.
+				
+				var c = document.createElement("canvas");
+				c.width = 1;
+				c.height = 1;
+				var ctx = c.getContext("2d");
+				ctx.fillStyle = colour_str;
+				ctx.fillRect(0, 0, 1, 1);
+				var px = Array.from(ctx.getImageData(0, 0, 1, 1).data).map(
+					function(x){
+						return srgb_to_linear(x / 255); // XXX: TODO DONT TRANSFORM ALPHA!
+					}
+				);
+				return px;
+			}
+			
+			function linear_rgba_to_colour_string(r, g, b, a) {
+				return "rgba(" + Math.round(linear_to_srgb(r)*255) + ", " + Math.round(linear_to_srgb(g)*255) + ", " + Math.round(linear_to_srgb(b)*255) + ", " + parseFloat(a.toFixed(3)) + ")";
+			}
+			
+			function parse_gradient_to_linear_rgba(gradient_string) {
+				// Returns an array of arrays, in the form
+				// [ [r, g, b, a, offset], ... ]
+				// where offset is a fractional value between 0.0 and 1.0
+				
+				var result = gradient_string.split(",").map(function(entry) {
+					var matches = entry.trim().match(/(.*)\s+([\d\.]+)%/);
+					var res = colour_string_to_linear_rgba(matches[1]);
+					res.push(matches[2] / 100); // convert %age to float
+					return res;
+				});
+				
+				// If the first offset is nonzero, we create a dummy entry
+				if (result[0][4] != 0) {
+					var start = result[0].slice(0, 4);
+					start.push(0);
+					result.unshift(start);
+				}
+				
+				// Similarly for the last offset
+				if (result[result.length-1][4] != 1) {
+					var end = result[result.length-1].slice(0, 4);
+					end.push(1);
+					result.push(end);
+				}
+				
+				return result;
+			}
+			
+			function linear_rgba_to_gradient_string(rgba_gradient) {
+				var sections = rgba_gradient.map(function(entry){
+					var r = entry[0];
+					var g = entry[1];
+					var b = entry[2];
+					var a = entry[3];
+					var offset = entry[4];
+					return linear_rgba_to_colour_string(r, g, b, a) + " " + parseFloat((offset*100).toFixed(2)) + "%"
+				})
+				return sections.join(", ")
+			}
+			
+			function linear_interpolate(x, y, a) {
+				return x * (1 - a) + y * a;
+			}
+			
+			function inverse_linear_interpolate(x, y, a) {
+				return (a - x) / (y - x);
+			}
+			
+			function render_perfect_gradient(canvas, gradient) {
+				var ctx = canvas.getContext("2d");
+				gradient_idx = 0;
+				for (var x = 0; x < canvas.width; x++) {
+					var x_float = x / (canvas.width-1);
+					while (x_float > gradient[gradient_idx+1][4]) {
+						gradient_idx++;
+					}
+					var prev = gradient[gradient_idx];
+					var next = gradient[gradient_idx+1];
+					var ratio = inverse_linear_interpolate(prev[4], next[4], x_float);
+					var r = linear_interpolate(prev[0], next[0], ratio);
+					var g = linear_interpolate(prev[1], next[1], ratio);
+					var b = linear_interpolate(prev[2], next[2], ratio);
+					var a = linear_interpolate(prev[3], next[3], ratio);
+					ctx.fillStyle = linear_rgba_to_colour_string(r, g, b, a);
+					ctx.fillRect(x, 0, 1, canvas.height);
+				}
+			}
+			
+			function improve_gradient(gradient, num_samples) {
+				improved = [];
+				for (var i=0; i < gradient.length - 1; i++) {
+					var prev = gradient[i];
+					var next = gradient[i+1];
+					improved.push(prev);
+					for (var j=1; j<=num_samples; j++) {
+						var ratio = j / (num_samples + 1);
+						var r = linear_interpolate(prev[0], next[0], ratio);
+						var g = linear_interpolate(prev[1], next[1], ratio);
+						var b = linear_interpolate(prev[2], next[2], ratio);
+						var a = linear_interpolate(prev[3], next[3], ratio);
+						var offset = linear_interpolate(prev[4], next[4], ratio);
+						improved.push([r, g, b, a, offset]);
+					}
+				}
+				improved.push(next);
+				return improved;
+			}
+			
+			function refresh() {
+				var input = document.querySelector("#input-textarea");
+				var orig = document.querySelector("#original-div");
+				var canvas = document.querySelector("#perfect-canvas");
+				var improv = document.querySelector("#improved-div");
+				var output = document.querySelector("#output-textarea");
+				
+				var gradient = parse_gradient_to_linear_rgba(input.value);
+				console.log(gradient);
+				
+				orig.style.background = "linear-gradient(to right, " +input.value+")";
+				
+				render_perfect_gradient(canvas, gradient);
+				
+				var improved_gradient = improve_gradient(gradient, 5);
+				
+				var improved_gradient_string = linear_rgba_to_gradient_string(improved_gradient);
+				
+				improv.style.background = "linear-gradient(to right, " +improved_gradient_string+")";
+				output.value = improved_gradient_string;
+			}
+			
+			window.onload = function(){
+				// TODO: refresh on windows resize if canvas size changed
+				refresh();
+			};
+		</script>
+	</body>
+</html>
