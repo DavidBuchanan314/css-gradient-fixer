@@ -46,7 +46,7 @@
 			</p>
 			
 			<h3>Input CSS:</h3>
-			<textarea id="input-textarea" oninput="refresh();">#0F0 0%, #f00 100%</textarea>
+			<textarea id="input-textarea" oninput="refresh();">#f00 0%, #0f0 50%, #00f 100%</textarea>
 			
 			<h3>How the CSS spec says it looks (native CSS rendering)</h3>
 			<div id="original-div"></div>
@@ -96,16 +96,18 @@
 				var ctx = c.getContext("2d");
 				ctx.fillStyle = colour_str;
 				ctx.fillRect(0, 0, 1, 1);
-				var px = Array.from(ctx.getImageData(0, 0, 1, 1).data).map(
+				var px_raw = Array.from(ctx.getImageData(0, 0, 1, 1).data);
+				var px = px_raw.slice(0, 3).map(
 					function(x){
-						return srgb_to_linear(x / 255); // XXX: TODO DONT TRANSFORM ALPHA!
+						return srgb_to_linear(x / 255);
 					}
 				);
+				px.push(px_raw[3] / 255); // alpha is already linear
 				return px;
 			}
 			
 			function linear_rgba_to_colour_string(r, g, b, a) {
-				return "rgba(" + Math.round(linear_to_srgb(r)*255) + ", " + Math.round(linear_to_srgb(g)*255) + ", " + Math.round(linear_to_srgb(b)*255) + ", " + parseFloat(a.toFixed(3)) + ")";
+				return "rgba(" + Math.round(linear_to_srgb(r)*255) + "," + Math.round(linear_to_srgb(g)*255) + "," + Math.round(linear_to_srgb(b)*255) + "," + parseFloat(a.toFixed(3)) + ")";
 			}
 			
 			function parse_gradient_to_linear_rgba(gradient_string) {
@@ -113,7 +115,8 @@
 				// [ [r, g, b, a, offset], ... ]
 				// where offset is a fractional value between 0.0 and 1.0
 				
-				var result = gradient_string.split(",").map(function(entry) {
+				var result = gradient_string.split(/,(?![^(]*\))/).map(function(entry) {
+					console.log(entry);
 					var matches = entry.trim().match(/(.*)\s+([\d\.]+)%/);
 					var res = colour_string_to_linear_rgba(matches[1]);
 					res.push(matches[2] / 100); // convert %age to float
@@ -146,7 +149,7 @@
 					var offset = entry[4];
 					return linear_rgba_to_colour_string(r, g, b, a) + " " + parseFloat((offset*100).toFixed(2)) + "%"
 				})
-				return sections.join(", ")
+				return sections.join(",");
 			}
 			
 			function linear_interpolate(x, y, a) {
@@ -204,19 +207,30 @@
 				var improv = document.querySelector("#improved-div");
 				var output = document.querySelector("#output-textarea");
 				
-				var gradient = parse_gradient_to_linear_rgba(input.value);
+				var matches = input.value.match(/([^(]*\([^,]*,)(.*)(\)[^\)]*)/);
+				if (matches) {
+					prefix = matches[1];
+					var gradient_str_in = matches[2];
+					suffix = matches[3];
+				} else {
+					var gradient_str_in = input.value;
+					prefix = "";
+					suffix = "";
+				}
+				
+				var gradient = parse_gradient_to_linear_rgba(gradient_str_in);
 				console.log(gradient);
 				
-				orig.style.background = "linear-gradient(to right, " +input.value+")";
+				orig.style.background = "linear-gradient(to right, " +gradient_str_in+")";
 				
 				render_perfect_gradient(canvas, gradient);
 				
-				var improved_gradient = improve_gradient(gradient, 5);
+				var improved_gradient = improve_gradient(gradient, 6);
 				
 				var improved_gradient_string = linear_rgba_to_gradient_string(improved_gradient);
 				
 				improv.style.background = "linear-gradient(to right, " +improved_gradient_string+")";
-				output.value = improved_gradient_string;
+				output.value = prefix + improved_gradient_string + suffix;
 			}
 			
 			window.onload = function(){
