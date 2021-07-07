@@ -229,6 +229,8 @@
 				return sections.join(",");
 			}
 			
+			// convert linear srgb to oklab, interpolate in oklab space,
+			// then convert back to linear srgb
 			function interpolate_linear_srgb_in_oklab(rgb0, rgb1, ratio) {
 				var Lab0 = linear_srgb_to_oklab(rgb0[0], rgb0[1], rgb0[2]);
 				var Lab1 = linear_srgb_to_oklab(rgb1[0], rgb1[1], rgb1[2]);
@@ -238,6 +240,7 @@
 				return oklab_to_linear_srgb(L, a, b);
 			}
 			
+			// Just do linear interpolation in linear srgb
 			function interpolate_linear_srgb_naive(rgb0, rgb1, ratio) {
 				var r = linear_interpolate(rgb0[0], rgb1[0], ratio);
 				var g = linear_interpolate(rgb0[1], rgb1[1], ratio);
@@ -245,6 +248,7 @@
 				return [r, g, b];
 			}
 			
+			// Decide what to do based on current UI settings
 			function dispatch_interpolate_linear_srgb(rgb0, rgb1, ratio) {
 				var mode = document.querySelector("#interpolation-selector").value;
 				switch (mode) {
@@ -265,6 +269,8 @@
 				return (a - x) / (y - x);
 			}
 			
+			// Render the "ideal" gradient to a canvas, for reference.
+			// We do the interpolation math on a per-pixel(column) basis.
 			function render_perfect_gradient(canvas, gradient) {
 				var ctx = canvas.getContext("2d");
 				gradient_idx = 0;
@@ -284,6 +290,7 @@
 				}
 			}
 			
+			// Add extra colour stops, between the existing ones, using smart interpolation
 			function improve_gradient(gradient, num_samples) {
 				improved = [];
 				for (var i=0; i < gradient.length - 1; i++) {
@@ -329,6 +336,8 @@
 				
 				render_perfect_gradient(canvas, gradient);
 				
+				// dunno why I'm calling these oversamples, because we're not actually
+				// oversampling, just undersampling less.
 				var num_oversamples = parseInt(document.querySelector("#oversamples").value);
 				var improved_gradient = improve_gradient(gradient, num_oversamples);
 				
@@ -339,7 +348,7 @@
 			}
 			
 			window.onload = function(){
-				// TODO: refresh on windows resize if canvas size changed
+				// TODO: refresh on window resize if canvas size changed
 				refresh();
 			};
 		</script>
