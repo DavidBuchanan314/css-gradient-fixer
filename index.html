@@ -8,37 +8,53 @@
 				max-width: 768px;
 				margin: auto;
 			}
-			textarea {
-				width: 100%;
-				height: 64px;
+			footer {
+				text-align: center;
+				margin-top: 8em;
 			}
-			#original-div {
-				border: 1px solid black;
-				width: 100%;
-				height: 64px;
+			h1 {
+				font-size: 3em;
+				text-align: center;
+				margin: 0;
+				margin-bottom: 1em;
+				padding: 0.5em;
+				background: linear-gradient(70deg, rgba(255,0,0,1) 0%,rgba(247,86,64,1) 14.29%,rgba(235,124,100,1) 28.57%,rgba(220,155,132,1) 42.86%,rgba(200,182,163,1) 57.14%,rgba(171,208,193,1) 71.43%,rgba(129,232,224,1) 85.71%,rgba(0,255,255,1) 100%);
 			}
-			#improved-div {
-				border: 1px solid black;
+			.wide {
 				width: 100%;
-				height: 64px;
-			}
-			#perfect-canvas {
+				height: 4rem;
+				box-sizing: border-box;
 				border: 1px solid black;
-				width: 100%;
-				height: 64px;
 			}
 		</style>
 	</head>
 	<body>
+		<h1>CSS Gradient Fixer</h1>
 		<article>
-			<h1>CSS Gradient Fixer</h1>
+			<h3>Why?</h3>
 			<p>
 				As is tradition, CSS does colour interpolation totally wrong.
 				<a href="https://erikmcclure.com/blog/everyone-does-srgb-wrong-because/">This article</a>
 				does a good job of explaining why.
 			</p>
 			<p>
-				My gradient string parsing code is a bit fragile.
+				<a href="https://www.w3.org/TR/css-color-4/">CSS Color Module Level 4</a>
+				will hopefully save us from this mess, by offering colour interpolation in CIELAB
+				space, among other niceties. In the meantime, this tool can be used
+				as a workaround to get prettier gradients.
+			</p>
+			<p>
+				In fact, we can do slightly better than CIELAB, with
+				<a href="https://bottosson.github.io/posts/oklab/">Oklab</a>.
+			<p>
+			<h3>How?</h3>
+			<p>
+				It's quite simple - we add extra colourstops to the gradient,
+				with correctly interpolated color values. The more we add, the closer
+				we get to our intended gradient.
+			</p>
+			<p>
+				My gradient string parsing code is a bit fragile (<a href="https://github.com/DavidBuchanan314/css-gradient-fixer">PRs welcome</a>).
 				It only works for inputs that match the pattern
 				<code>
 					[colour 0] [percentage 0], ..., [colour n] [percentage n]
@@ -46,20 +62,42 @@
 			</p>
 			
 			<h3>Input CSS:</h3>
-			<textarea id="input-textarea" oninput="refresh();">#f00 0%, #0f0 50%, #00f 100%</textarea>
+			<textarea id="input-textarea" class="wide" oninput="refresh();">#0f0 0%, #f00 50%, #00f 100%</textarea>
+			
+			<h3>Interpolation type:</h3>
+			<select id="interpolation-selector" oninput="refresh();">
+				<option value="oklab">Oklab</option>
+				<option value="linear">Linear RGB (gamma corrected)</option>
+			</select>
+			
+			<h3>Extra Colour Stops:<h3>
+			<input type="number" id="oversamples" name="oversamples" min="0" max="15" value="7" oninput="refresh();">
 			
 			<h3>How the CSS spec says it looks (native CSS rendering)</h3>
-			<div id="original-div"></div>
+			<div id="original-div" class="wide"></div>
 			
 			<h3>How it should really look (canvas rendering with proper interpolation)</h3>
-			<canvas id="perfect-canvas"></canvas>
+			<canvas id="perfect-canvas" class="wide"></canvas>
 			
 			<h3>How our improved CSS looks (native CSS rendering)</h3>
-			<div id="improved-div"></div>
+			<div id="improved-div" class="wide"></div>
 			
 			<h3>Output CSS:</h3>
-			<textarea id="output-textarea">hello I am some css</textarea>
+			<textarea id="output-textarea" class="wide">hello I am some css</textarea>
+			
+			<br>
+			
+			<h3>Future Ideas</h3>
+			<p>
+				Adding non-linear interpolation between colour stops would be good.
+			</p>
 		</article>
+		<footer>
+			<hr>
+			<p>
+				<a href="https://github.com/DavidBuchanan314/css-gradient-fixer">Source Code</a> - <a href="https://twitter.com/David3141593">Tweets</a>
+			</p>
+		</footer>
 		
 		<script type="text/javascript">
 			
@@ -79,6 +117,45 @@
 				} else {
 					return 1.055 * Math.pow(c_in, 1/2.4) - 0.055;
 				}
+			}
+			
+			Number.prototype.clamp = function(min, max) {
+				return Math.min(Math.max(this, min), max);
+			};
+			
+			// yeeted from https://bottosson.github.io/posts/oklab/ under MIT license
+			function linear_srgb_to_oklab(r, g, b) 
+			{
+				var l = 0.4122214708 * r + 0.5363325363 * g + 0.0514459929 * b;
+				var m = 0.2119034982 * r + 0.6806995451 * g + 0.1073969566 * b;
+				var s = 0.0883024619 * r + 0.2817188376 * g + 0.6299787005 * b;
+				
+				var l_ = Math.cbrt(l);
+				var m_ = Math.cbrt(m);
+				var s_ = Math.cbrt(s);
+				
+				return [
+					0.2104542553*l_ + 0.7936177850*m_ - 0.0040720468*s_,
+					1.9779984951*l_ - 2.4285922050*m_ + 0.4505937099*s_,
+					0.0259040371*l_ + 0.7827717662*m_ - 0.8086757660*s_,
+				];
+			}
+			
+			function oklab_to_linear_srgb(L, a, b) 
+			{
+				var l_ = L + 0.3963377774 * a + 0.2158037573 * b;
+				var m_ = L - 0.1055613458 * a - 0.0638541728 * b;
+				var s_ = L - 0.0894841775 * a - 1.2914855480 * b;
+				
+				var l = l_*l_*l_;
+				var m = m_*m_*m_;
+				var s = s_*s_*s_;
+				
+				return [
+					(+4.0767416621 * l - 3.3077115913 * m + 0.2309699292 * s).clamp(0, 1),
+					(-1.2684380046 * l + 2.6097574011 * m - 0.3413193965 * s).clamp(0, 1),
+					(-0.0041960863 * l - 0.7034186147 * m + 1.7076147010 * s).clamp(0, 1),
+				];
 			}
 			
 			function colour_string_to_linear_rgba(colour_str) {
@@ -152,6 +229,34 @@
 				return sections.join(",");
 			}
 			
+			function interpolate_linear_srgb_in_oklab(rgb0, rgb1, ratio) {
+				var Lab0 = linear_srgb_to_oklab(rgb0[0], rgb0[1], rgb0[2]);
+				var Lab1 = linear_srgb_to_oklab(rgb1[0], rgb1[1], rgb1[2]);
+				var L = linear_interpolate(Lab0[0], Lab1[0], ratio);
+				var a = linear_interpolate(Lab0[1], Lab1[1], ratio);
+				var b = linear_interpolate(Lab0[2], Lab1[2], ratio);
+				return oklab_to_linear_srgb(L, a, b);
+			}
+			
+			function interpolate_linear_srgb_naive(rgb0, rgb1, ratio) {
+				var r = linear_interpolate(rgb0[0], rgb1[0], ratio);
+				var g = linear_interpolate(rgb0[1], rgb1[1], ratio);
+				var b = linear_interpolate(rgb0[2], rgb1[2], ratio);
+				return [r, g, b];
+			}
+			
+			function dispatch_interpolate_linear_srgb(rgb0, rgb1, ratio) {
+				var mode = document.querySelector("#interpolation-selector").value;
+				switch (mode) {
+					case "oklab":
+						return interpolate_linear_srgb_in_oklab(rgb0, rgb1, ratio);
+					case "linear":
+						return interpolate_linear_srgb_naive(rgb0, rgb1, ratio);
+					default:
+						// panik
+				}
+			}
+			
 			function linear_interpolate(x, y, a) {
 				return x * (1 - a) + y * a;
 			}
@@ -171,9 +276,8 @@
 					var prev = gradient[gradient_idx];
 					var next = gradient[gradient_idx+1];
 					var ratio = inverse_linear_interpolate(prev[4], next[4], x_float);
-					var r = linear_interpolate(prev[0], next[0], ratio);
-					var g = linear_interpolate(prev[1], next[1], ratio);
-					var b = linear_interpolate(prev[2], next[2], ratio);
+					var r, g, b;
+					[r, g, b] = dispatch_interpolate_linear_srgb(prev, next, ratio);
 					var a = linear_interpolate(prev[3], next[3], ratio);
 					ctx.fillStyle = linear_rgba_to_colour_string(r, g, b, a);
 					ctx.fillRect(x, 0, 1, canvas.height);
@@ -188,9 +292,8 @@
 					improved.push(prev);
 					for (var j=1; j<=num_samples; j++) {
 						var ratio = j / (num_samples + 1);
-						var r = linear_interpolate(prev[0], next[0], ratio);
-						var g = linear_interpolate(prev[1], next[1], ratio);
-						var b = linear_interpolate(prev[2], next[2], ratio);
+						var r, g, b;
+						[r, g, b] = dispatch_interpolate_linear_srgb(prev, next, ratio);
 						var a = linear_interpolate(prev[3], next[3], ratio);
 						var offset = linear_interpolate(prev[4], next[4], ratio);
 						improved.push([r, g, b, a, offset]);
@@ -207,8 +310,9 @@
 				var improv = document.querySelector("#improved-div");
 				var output = document.querySelector("#output-textarea");
 				
-				var matches = input.value.match(/([^(]*\([^,]*,)(.*)(\)[^\)]*)/);
+				var matches = input.value.trim().match(/([^(]*\([^,]*,)(.*)(\);)$/);
 				if (matches) {
+					// special case for whole lines of CSS containing e.g. linear-gradient(direction, gradient);
 					prefix = matches[1];
 					var gradient_str_in = matches[2];
 					suffix = matches[3];
@@ -225,7 +329,8 @@
 				
 				render_perfect_gradient(canvas, gradient);
 				
-				var improved_gradient = improve_gradient(gradient, 6);
+				var num_oversamples = parseInt(document.querySelector("#oversamples").value);
+				var improved_gradient = improve_gradient(gradient, num_oversamples);
 				
 				var improved_gradient_string = linear_rgba_to_gradient_string(improved_gradient);
 				
