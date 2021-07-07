@@ -26,6 +26,9 @@
 				box-sizing: border-box;
 				border: 1px solid black;
 			}
+			hr {
+				margin: 3em 1em;
+			}
 		</style>
 	</head>
 	<body>
@@ -61,6 +64,8 @@
 				</code>
 			</p>
 			
+			<hr>
+			
 			<h3>Input CSS:</h3>
 			<textarea id="input-textarea" class="wide" oninput="refresh();">#0f0 0%, #f00 50%, #00f 100%</textarea>
 			
@@ -85,12 +90,22 @@
 			<h3>Output CSS:</h3>
 			<textarea id="output-textarea" class="wide">hello I am some css</textarea>
 			
-			<br>
+			<hr>
 			
-			<h3>Future Ideas</h3>
-			<p>
-				Adding non-linear interpolation between colour stops would be good.
-			</p>
+			<h3>Future Ideas:</h3>
+			<ul>
+				<li><p>
+					Adding non-linear interpolation between colour stops.
+				</p></li>
+				<li><p>
+					Intelligent placement of extra colour stops. If we prioritise
+					placement where the error is greatest, then we won't need so
+					many additional stops.
+				</p></li>
+				<li><p>
+					Interactive UI for editing gradients.
+				</p></li>
+			</ul>
 		</article>
 		<footer>
 			<hr>
